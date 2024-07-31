@@ -38,7 +38,7 @@ results = model("path/to/bus.jpg")
 
 yolov9预训练权重: https://docs.ultralytics.com/zh/models/yolov9/#__tabbed_1_1
 
-yolo模型训练数据: `/home/kemove/zyq/giit/yolo_taoguan/train`, 自行准备训练数据
+自行准备训练的yolo模型格式数据
 
 #### step3: 安装大疆测温sdk
 官方地址: https://www.dji.com/cn/downloads/softwares/dji-thermal-sdk
@@ -104,7 +104,7 @@ print(min(img))
 整体思路: 先将原图输入大疆红外测温api, 得到原图像的温度矩阵, 再通过目标检测+分割模型识别出具体区域, 分割模型用于剔除掉目标以外的干扰区域, 减少因目标外区域温度高于目标本身, 而影响最大温度输出值. 使用的模型harcode名称为['xianzhang', 'taoguan'], 可根据实际情况修改.
 
 运行步骤:
-* 更新configs.py配置文件, 自行准备预训练权重
+* 更新configs.py配置文件, 自行训练权重或使用[预训练权重](https://drive.google.com/drive/folders/12fyAINxXub5zx6oLKU-pbOmmlXIKdpsr?usp=sharing), 需放在`model_weights/v1/`下
 * 是否输出中间结果根据configs.py配置文件中的`is_show`字段决定, 可自行修改
 * `python main.py`生成识别后的图像, 包含目标区域和区域最高温度值
 
