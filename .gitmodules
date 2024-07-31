@@ -1,0 +1,3 @@
+[submodule "thermal_parser"]
+	path = thermal_parser
+	url = https://github.com/daz/dji-thermal-sdk-docker
