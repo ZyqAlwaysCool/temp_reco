@@ -114,7 +114,7 @@ print(min(img))
 
 输出图像示例:
 
-![image](./draw_res/draw_temp_1f28b93da9120894312595d9c8ca0087.jpg)
+![image](./draw_test.jpg)
 
 ### 3.参考
 * 大疆测温sdk
