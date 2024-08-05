@@ -43,7 +43,8 @@ class YoloIRPredictor:
         :params save: 是否保存图像结果
 
         return
-            mask3ch: mask二值图像,[0, 255]
+            mask3ch: mask二值图像,[0, 255] 255-->背景 0-->目标
+            ori_target_contour: 分割目标的原始区域轮廓坐标
         '''
 
         for r in yolo_pred_res:
@@ -60,12 +61,16 @@ class YoloIRPredictor:
 
                 #  Extract contour result
                 contour = c.masks.xy.pop()
+                ori_target_contour = contour
+                
                 #  Changing the type
                 contour = contour.astype(np.int32)
                 #  Reshaping
                 contour = contour.reshape(-1, 1, 2)
-
-
+                
+                # shrink contour
+                contour = shrink_contour(contour, DEFAULT_CONFIG['shrink_ratio'])
+                
                 # Draw contour onto mask
                 _ = cv2.drawContours(b_mask, [contour], -1, (255, 255, 255), cv2.FILLED)
                 
@@ -81,7 +86,7 @@ class YoloIRPredictor:
                     save_fname = DEFAULT_CONFIG['save_path'] + '/' + "isolated_{}_{}.JPG".format(label, gen_md5_info('ISOLATED'))
                     cv2.imwrite(save_fname, isolated)
                 
-                return mask3ch
+                return mask3ch, ori_target_contour
     
     def __seg_taoguan(self, image: np.ndarray, conf=0.5):
         '''
@@ -89,6 +94,9 @@ class YoloIRPredictor:
         
         :params image: 图像, 格式为np.ndarray
         :params conf: 置信度, 默认为0.5
+        
+        return
+            分割目标mask矩阵和原始目标分割区域轮廓
         '''
         result = self.taoguan_seg_model.predict(image, conf=conf)
 
@@ -103,6 +111,9 @@ class YoloIRPredictor:
         
         :params image: 图像, 格式为np.ndarray
         :params conf: 置信度, 默认为0.5
+
+        return
+            分割目标mask矩阵和原始目标分割区域轮廓
         '''
         result = self.xianzhang_seg_model.predict(image, conf=conf)
 
@@ -115,15 +126,18 @@ class YoloIRPredictor:
         thermal = Thermal(dtype=np.float32)
         temperature_mat = thermal.parse_dirp2(filepath_image=image_path) #基于原始图像获取温度矩阵, 代表每个像素点的温度值
         
-        image = cv2.imread(image_path) 
+        image = cv2.imread(image_path)
+
         # 获取套管目标识别结果
         taoguan_det_result = self.taoguan_det_model.predict(image, save=visual, conf=conf)
         boxes, classes, names, confidences = self.__get_yolo_pred_info(taoguan_det_result)
 
         # 基于套管目标识别结果, 分割出具体的目标轮廓
         cropped_img_mask = None
+        ori_target_contour = None
         boxes_list = []
         temp_list = []
+        contour_list = []
         
         for box, cls, conf in zip(boxes, classes, confidences):
             x1, y1, x2, y2 = box
@@ -144,31 +158,41 @@ class YoloIRPredictor:
             cropped_img = crop_img(image, box, CROPPED_CONFIGS['is_show'])
             
             if name == 'taoguan':
-                cropped_img_mask = self.__seg_taoguan(cropped_img)
+                cropped_img_mask, ori_target_contour = self.__seg_taoguan(cropped_img)
             elif name == 'xianzhang':
-                cropped_img_mask = self.__seg_xianzhang(cropped_img)
+                cropped_img_mask, ori_target_contour = self.__seg_xianzhang(cropped_img)
             else:
                 raise Exception('unknown class: {}'.format(name))
             
-            #分割后的mask二值图像中包含0和255, 255表示目标外区域, 属于干扰项, 在计算温度时需要剔除
-            indices = np.where(cropped_img_mask == 255)
+            if cropped_img_mask is None or ori_target_contour is None:
+                continue
+            
+            # 分割后的mask二值图像中包含0和255, 255表示目标外区域, 属于干扰项, 在计算温度时需要剔除
+            indices = np.where(cropped_img_mask == 0)
             no_cal_coord = list(set(zip(indices[0], indices[1]))) #np坐标的格式(行, 列),映射到图像是(y, x)
             cropped_temp_img = temperature_mat[y1:y2, x1:x2]
 
             for i in no_cal_coord:
                 try:
-                    cropped_temp_img[i[0]][i[1]] = 0 #将温度矩阵中对应的坐标置0,不参与最高温度计算
+                    cropped_temp_img[i[0]][i[1]] = 0 # 将温度矩阵中对应的坐标置0,不参与最高温度计算
                 except:
-                    #边界坐标点处理
+                    # 边界坐标点处理
                     print('error coordinates=({}) image.shape=({})'.format(i, cropped_temp_img.shape))
                     cropped_temp_img[i[0]-1][i[1]-1] = 0
+            
+            # 获取原始图像上目标区域分割轮廓坐标
+            ori_img_contour_coord = []
+            for coord in ori_target_contour:
+                ori_img_contour_coord.append(transform_coordinate(coord[0], coord[1], (x1, y1, x2, y2), (image.shape[1], image.shape[0])))
+            ori_img_contour = np.array(ori_img_contour_coord).astype(np.int32).reshape(-1, 1, 2)
             
             max_temp = np.max(cropped_temp_img)
 
             boxes_list.append([x1, y1, x2, y2, name])
             temp_list.append(np.round(max_temp, 2))
+            contour_list.append([ori_img_contour, name])
         
-        return boxes_list, temp_list
+        return boxes_list, temp_list, contour_list
             
             
     

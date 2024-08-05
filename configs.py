@@ -15,7 +15,7 @@ MODEL_CONFIGS = {
 DRAW_CONFIGS = {
     'draw_color': {
         'xianzhang': (0, 255, 0),
-        'taoguan': (0, 0, 255),
+        'taoguan': (255, 0, 0),
     },
     'draw_scale': 0.5,
     'save_pic_path': './draw_res',
@@ -33,5 +33,6 @@ DEFAULT_CONFIG = {
     'is_show': False,
     'enable_taoguan': True, #检测套管目标
     'enable_xianzhang': True, #检测线掌目标
+    'shrink_ratio': 0.5, #分割区域比例
 }
 

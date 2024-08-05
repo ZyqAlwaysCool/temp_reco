@@ -8,6 +8,8 @@ import time
 import hashlib
 import cv2
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.affinity import scale
 
 from configs import DRAW_CONFIGS, MODEL_CONFIGS, CROPPED_CONFIGS
 
@@ -105,3 +107,93 @@ def crop_img(image, box, save=False):
         cv2.imwrite(save_fname, cropped_image)
     
     return cropped_image
+
+def shrink_contour(contour: np.ndarray, shrink_ratio=0.9):
+    '''
+    基于比例对原始图像轮廓进行缩放
+    
+    :params contour: 原始图像轮廓 形如 [[[x1, y1]], [[x2, y2]], ...]
+    :params shrink_ratio: 缩放比例
+    
+    return
+    '''
+    poly_coord = [c[0] for c in contour]
+    polygon = Polygon(poly_coord)
+    centroid = polygon.centroid
+    scaled_polygon = scale(polygon, xfact=shrink_ratio, yfact=shrink_ratio, origin=centroid)
+    
+    reshaped_contours_coord = []
+    for point in scaled_polygon.exterior.coords:
+        reshaped_contours_coord.append(point)
+    shrink_contour = np.array(reshaped_contours_coord).astype(np.int32).reshape(-1, 1, 2)
+    return shrink_contour
+
+def transform_coordinate(x_prime, y_prime, crop_area, original_size):
+    """
+    将裁剪图像上的坐标点转换为原始图像上的坐标点。
+    
+    参数:
+    x_prime: 裁剪图像上的x坐标。
+    y_prime: 裁剪图像上的y坐标。
+    crop_area: 裁剪区域，由(x1, y1, x2, y2)定义。
+    original_size: 原始图像的尺寸，由(width, height)定义。注意, 是w*h, cv2.imread读取的图像尺寸是h*w
+    
+    返回:
+    转换后的坐标点(x, y)。
+    """
+    x1, y1, x2, y2 = crop_area
+    original_width, original_height = original_size
+    
+    # 转换坐标点
+    x = x_prime + x1
+    y = y_prime + y1
+    
+    # 检查并调整坐标点是否超出原始图像边界
+    x = min(max(x, 0), original_width - 1)
+    y = min(max(y, 0), original_height - 1)
+    
+    return x, y
+
+def draw_contour_and_labels(image_path: str, contour_list: list, temps: list):
+    """
+    在红外图像上绘制矩形框和对应温度数值。
+    
+    :param image_path: 原始图像路径
+    :param contour_list: 目标的轮廓坐标集, list
+    :param temps: 每个目标轮廓对应的温度数值列表
+    """
+
+    image = cv2.imread(image_path)
+    h, w = image.shape[:2]
+
+    # # 确保图像是BGR格式
+    # if len(image.shape) == 3 and image.shape[2] == 3:
+    #     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    
+    # 绘制分割轮廓和区域最高温度值
+    for (contour, name), temp in zip(contour_list, temps):
+        if name == 'xianzhang':
+            _ = cv2.drawContours(image, [contour], 0, DRAW_CONFIGS['draw_color']['xianzhang'], 2)
+        elif name == 'taoguan':
+            _ = cv2.drawContours(image, [contour], 0, DRAW_CONFIGS['draw_color']['taoguan'], 2)
+        
+        x, y, w, h = cv2.boundingRect(contour)
+        text_position = (x + w // 2 - 5, y + h // 2) #文本输出位置
+        text = str(temp)
+        #font = cv2.FONT_HERSHEY_SIMPLEX
+        font = cv2.FONT_HERSHEY_DUPLEX
+        font_scale = DRAW_CONFIGS['draw_scale']
+        font_color = (255, 255, 255)  # 白色文本
+        #line_type = 2
+        thickness = 1 #文本粗细
+        line_type = cv2.LINE_AA
+        
+    
+        # 绘制文本
+        cv2.putText(image, text, text_position, font, font_scale, font_color, thickness, line_type, bottomLeftOrigin=False)
+    
+    # 保存图像
+    if not os.path.exists(DRAW_CONFIGS['save_pic_path']):
+        os.makedirs(DRAW_CONFIGS['save_pic_path'])
+    save_fname = DRAW_CONFIGS['save_pic_path'] + '/' + 'draw_temp_{}.jpg'.format(gen_md5_info('DRAW_TEMP'))
+    cv2.imwrite(save_fname, image)
