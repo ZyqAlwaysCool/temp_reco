@@ -197,3 +197,26 @@ def draw_contour_and_labels(image_path: str, contour_list: list, temps: list):
         os.makedirs(DRAW_CONFIGS['save_pic_path'])
     save_fname = DRAW_CONFIGS['save_pic_path'] + '/' + 'draw_temp_{}.jpg'.format(gen_md5_info('DRAW_TEMP'))
     cv2.imwrite(save_fname, image)
+
+
+def get_temp_value(cropped_temp_mat, boxes, origin_img):
+    x1, y1, x2, y2 = boxes
+    
+    # 计算区域温度最大值
+    max_temp = np.max(cropped_temp_mat)
+    max_index = np.argmax(cropped_temp_mat.flatten())
+    temp_x_max, temp_y_max = np.unravel_index(max_index, cropped_temp_mat.shape) #np的x,y对应于图像是y,x. 坐标轴不同
+    
+    # 计算区域温度最小值
+    non_zero_elements = cropped_temp_mat[cropped_temp_mat != 0]
+    if len(non_zero_elements) == 0:
+        raise Exception('区域温度最小值无非0值, 请调大轮廓缩放比例')
+    min_temp = np.min(non_zero_elements)
+    indices = np.where(cropped_temp_mat == min_temp)
+    min_indices = list(set(zip(indices[0], indices[1]))) #可能存在多个相同最小值温度点, 默认取第一个
+    temp_x_min, temp_y_min = min_indices[0]
+    
+    xmax, ymax = transform_coordinate(temp_y_max, temp_x_max, (x1, y1, x2, y2), (origin_img.shape[1], origin_img.shape[0]))
+    xmin, ymin = transform_coordinate(temp_y_min, temp_x_min, (x1, y1, x2, y2), (origin_img.shape[1], origin_img.shape[0]))
+
+    return [xmax, ymax, round(max_temp, 2)], [xmin, ymin, round(min_temp, 2)]

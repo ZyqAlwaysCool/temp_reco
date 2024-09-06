@@ -167,7 +167,7 @@ class YoloIRPredictor:
             if cropped_img_mask is None or ori_target_contour is None:
                 continue
             
-            # 分割后的mask二值图像中包含0和255, 255表示目标外区域, 属于干扰项, 在计算温度时需要剔除
+            # 分割后的mask二值图像中包含0和255, 0表示目标外区域, 属于干扰项, 在计算温度时需要剔除
             indices = np.where(cropped_img_mask == 0)
             no_cal_coord = list(set(zip(indices[0], indices[1]))) #np坐标的格式(行, 列),映射到图像是(y, x)
             cropped_temp_img = temperature_mat[y1:y2, x1:x2]

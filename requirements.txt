@@ -27,7 +27,6 @@ debugpy==1.8.1
 decorator==5.1.1
 defusedxml==0.7.1
 dill==0.3.8
-echonet @ file:///home/kemove/hyx/EchoNet-Dynamic-code/dynamic
 einops==0.8.0
 executing==2.0.1
 fastjsonschema==2.20.0
